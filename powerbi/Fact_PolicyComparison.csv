@@ -1,0 +1,5 @@
+Policy,ApprovalRate,BadRate,DefaultsCaptured,NetProfit_NTD
+Approve everyone,1.0,0.221,0.0,-6940000
+Rule: decline 1+ month late,0.777,0.142,0.5,14360000
+Model at rule's approval rate,0.777,0.132,0.54,15060000
+Model at profit optimum,0.591,0.105,0.72,17340000

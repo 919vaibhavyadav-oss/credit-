@@ -1,0 +1,142 @@
+CREDIT POLICY DASHBOARD — DAX MEASURES
+======================================
+Create a measure table first: Home > Enter data > name it "_Measures", one
+dummy column, Load. Then paste each block via Modeling > New measure.
+
+The whole point of this model is that LGD and margin are LIVE. The policy curve
+stores cumulative good/bad exposure at every cutoff, so profit is recomputed in
+DAX against two What-If parameters rather than baked into the data.
+
+
+-- ====================================================== WHAT-IF PARAMETERS
+
+Create these two FIRST, via Modeling > New parameter > Numeric range:
+
+  Name: LGD          Min 0.45   Max 0.95   Increment 0.01   Default 0.75
+  Name: Margin       Min 0.06   Max 0.33   Increment 0.01   Default 0.18
+
+Power BI creates a table and a "LGD Value" / "Margin Value" measure for each.
+Put both slicers on every page.
+
+
+-- ============================================================ CORE ECONOMICS
+
+Cum Good Exposure = SUM ( Fact_PolicyCurve[cum_good_exposure] )
+
+Cum Bad Exposure = SUM ( Fact_PolicyCurve[cum_bad_exposure] )
+
+Revenue = [Cum Good Exposure] * [Margin Value]
+
+Credit Loss = [Cum Bad Exposure] * [LGD Value]
+
+Net Profit = [Revenue] - [Credit Loss]
+-- Format: Whole number, thousands separator. This is the measure the whole
+-- dashboard turns on - it moves the instant either slider moves.
+
+Break-even Cutoff = DIVIDE ( [Margin Value], [Margin Value] + [LGD Value] )
+-- The per-account break-even: approve while (1-p)*margin > p*LGD.
+-- At the defaults this is 0.1935. The SIMULATED optimum lands lower, at
+-- 0.1775, and the entire gap is the exposure mix - see the Risk Bands page.
+
+
+-- ====================================================== OPTIMAL OPERATING POINT
+
+Optimal Profit =
+MAXX ( ALL ( Fact_PolicyCurve ),
+       Fact_PolicyCurve[cum_good_exposure] * [Margin Value]
+     - Fact_PolicyCurve[cum_bad_exposure] * [LGD Value] )
+
+Optimal Cutoff =
+VAR Best = [Optimal Profit]
+RETURN
+    MINX (
+        FILTER ( ALL ( Fact_PolicyCurve ),
+                 Fact_PolicyCurve[cum_good_exposure] * [Margin Value]
+               - Fact_PolicyCurve[cum_bad_exposure] * [LGD Value] = Best ),
+        Fact_PolicyCurve[cutoff]
+    )
+
+Optimal Approval Rate =
+VAR Best = [Optimal Profit]
+RETURN
+    MINX (
+        FILTER ( ALL ( Fact_PolicyCurve ),
+                 Fact_PolicyCurve[cum_good_exposure] * [Margin Value]
+               - Fact_PolicyCurve[cum_bad_exposure] * [LGD Value] = Best ),
+        Fact_PolicyCurve[approval_rate]
+    )
+
+Optimal Bad Rate =
+VAR Best = [Optimal Profit]
+RETURN
+    MINX (
+        FILTER ( ALL ( Fact_PolicyCurve ),
+                 Fact_PolicyCurve[cum_good_exposure] * [Margin Value]
+               - Fact_PolicyCurve[cum_bad_exposure] * [LGD Value] = Best ),
+        Fact_PolicyCurve[bad_rate]
+    )
+
+
+-- ================================================================ PORTFOLIO
+
+Accounts = COUNTROWS ( Fact_Accounts )
+
+Total Exposure = SUM ( Fact_Accounts[exposure] )
+
+Actual Default Rate = AVERAGE ( Fact_Accounts[y] )
+
+Mean Predicted Risk = AVERAGE ( Fact_Accounts[p] )
+
+Calibration Gap = [Mean Predicted Risk] - [Actual Default Rate]
+-- 0.2208 vs 0.2213 = -0.0005. Format as percentage, 2 dp. The shipped model
+-- is calibrated to within 0.05pp; every SMOTE variant is not.
+
+Expected Loss = SUMX ( Fact_Accounts, Fact_Accounts[p] * Fact_Accounts[exposure] ) * [LGD Value]
+
+
+-- ============================================================ RISK SEGMENTATION
+
+Decile Bad Rate = AVERAGE ( Fact_Deciles[bad_rate] )
+
+Decile Mean Exposure = AVERAGE ( Fact_Deciles[mean_exposure] )
+
+Top 3 Decile Capture =
+VAR TopBads =
+    CALCULATE ( SUMX ( Fact_Accounts, Fact_Accounts[y] ),
+                FILTER ( ALL ( Fact_Accounts ), Fact_Accounts[decile] >= 8 ) )
+VAR AllBads = CALCULATE ( SUMX ( Fact_Accounts, Fact_Accounts[y] ), ALL ( Fact_Accounts ) )
+RETURN
+    DIVIDE ( TopBads, AllBads )
+-- ~63%. The riskiest 30% of accounts hold 63% of all defaults.
+
+
+-- ============================================================ MODEL BENCHMARK
+
+Best AUC = MAX ( Fact_ModelBenchmark[ROC_AUC] )
+
+AUC Spread = MAX ( Fact_ModelBenchmark[ROC_AUC] ) - MIN ( Fact_ModelBenchmark[ROC_AUC] )
+-- 0.023 across five model families. When architectures this different land in
+-- the same place, the data is the binding constraint, not the model.
+
+Calibration Error = AVERAGE ( Fact_ModelBenchmark[Mean_Predicted] )
+                  - AVERAGE ( Fact_ModelBenchmark[Actual_Rate] )
+
+Calibration Multiple = DIVIDE ( AVERAGE ( Fact_ModelBenchmark[Mean_Predicted] ),
+                                AVERAGE ( Fact_ModelBenchmark[Actual_Rate] ) )
+-- Logistic Regression 1.97x, the shipped model 1.00x. ROC-AUC registers none
+-- of this, because it reads only the ordering of predictions.
+
+
+-- ============================================================ POLICY COMPARISON
+
+Policy Net Profit = SUM ( Fact_PolicyComparison[NetProfit_NTD] )
+
+Model Lift vs Rule =
+VAR ModelP = CALCULATE ( [Policy Net Profit],
+             Fact_PolicyComparison[Policy] = "Model at rule's approval rate" )
+VAR RuleP  = CALCULATE ( [Policy Net Profit],
+             Fact_PolicyComparison[Policy] = "Rule: decline 1+ month late" )
+RETURN
+    ModelP - RuleP
+-- NT$700k. This is the number to quote: like-for-like at the same approval
+-- rate. Comparing against "approve everyone" flatters any policy at all.
