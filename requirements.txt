@@ -1,19 +1,13 @@
+# Runtime dependencies for the Streamlit policy simulator (app.py).
+#
+# Deliberately minimal. The app reads a pre-scored CSV rather than loading the
+# model, so it needs no xgboost / scikit-learn / tensorflow at runtime — which
+# is what keeps the deployed build small enough to fit a free hosting tier.
+#
+# To reproduce the modelling pipeline in the notebook, install
+# requirements-notebook.txt instead.
+
+streamlit>=1.45
 pandas>=2.2
 numpy>=2.1
-scipy>=1.15
-scikit-learn>=1.6
-statsmodels>=0.14
-imbalanced-learn>=0.13
-xgboost>=3.0
-lightgbm>=4.6
-tensorflow>=2.20
-shap>=0.52
-lime>=0.2
-matplotlib>=3.10
-seaborn>=0.13
-xlrd>=2.0
-joblib>=1.4
-
-# policy simulator app
-streamlit>=1.45
 plotly>=5.24

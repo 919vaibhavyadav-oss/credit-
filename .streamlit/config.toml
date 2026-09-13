@@ -1,0 +1,11 @@
+# Only the accent colour is pinned. Base background and text are left to the
+# viewer's light/dark preference — setting backgroundColor here would force one
+# theme on everybody.
+[theme]
+primaryColor = "#2a78d6"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

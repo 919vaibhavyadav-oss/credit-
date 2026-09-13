@@ -1,0 +1,28 @@
+# Full research environment — everything needed to run the notebook end to end.
+# The deployed app does NOT use these; see requirements.txt.
+
+-r requirements.txt
+
+# data + stats
+scipy>=1.15
+statsmodels>=0.14
+xlrd>=2.0          # reads the original UCI .xls
+
+# modelling
+scikit-learn>=1.6
+imbalanced-learn>=0.13
+xgboost>=3.0
+lightgbm>=4.6
+tensorflow>=2.20
+joblib>=1.4
+
+# interpretability
+shap>=0.52
+lime>=0.2
+
+# plotting
+matplotlib>=3.10
+seaborn>=0.13
+
+# notebook
+jupyter>=1.1
